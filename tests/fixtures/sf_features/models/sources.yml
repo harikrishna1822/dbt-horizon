@@ -1,0 +1,13 @@
+version: 2
+sources:
+  - name: raw
+    database: "{{ var('raw_db') }}"
+    schema: "{{ var('raw_schema') }}"
+    tables:
+      - name: orders
+      - name: customers
+  - name: events
+    database: RAW
+    schema: EVENTS
+    tables:
+      - name: clicks

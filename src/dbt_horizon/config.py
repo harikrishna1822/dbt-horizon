@@ -70,12 +70,27 @@ class Credential(_Model):
         return _check_env_name(v)
 
 
+class SchemaRef(_Model):
+    database: str | None = None
+    schema_name: str | None = Field(default=None, alias="schema")
+
+    @model_validator(mode="after")
+    def _idents(self) -> SchemaRef:
+        _check_ident(self.database, "database")
+        _check_ident(self.schema_name, "schema")
+        if self.database is None and self.schema_name is None:
+            raise ValueError("needs database and/or schema")
+        return self
+
+
 class SnowflakeConfig(_Model):
     account: str
-    # Databases to attach for `connect`; later phases add the ones dbt sources reference.
+    # Databases to attach for `connect`; `analyze` adds the ones dbt sources reference.
     databases: list[str] = []
     reader: Credential
     writer: Credential | None = None
+    # Database/schema of the Snowflake dbt target. Default: the repo's profiles.yml.
+    target: SchemaRef | None = None
 
     @field_validator("account")
     @classmethod
@@ -96,19 +111,6 @@ class SnowflakeConfig(_Model):
     @property
     def oauth_token_uri(self) -> str:
         return f"{self.catalog_uri}/v1/oauth/tokens"
-
-
-class SchemaRef(_Model):
-    database: str | None = None
-    schema_name: str | None = Field(default=None, alias="schema")
-
-    @model_validator(mode="after")
-    def _idents(self) -> SchemaRef:
-        _check_ident(self.database, "database")
-        _check_ident(self.schema_name, "schema")
-        if self.database is None and self.schema_name is None:
-            raise ValueError("needs database and/or schema")
-        return self
 
 
 class SourceMappingRule(_Model):

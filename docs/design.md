@@ -64,7 +64,7 @@ Acceptance test for the app: `retail_analytics_dbt` from GitHub runs read mode a
                          |
   [6 preflight] auth, visibility, name clashes, writer grants
                          |
-  [7 run] dbt build (programmatic dbtRunner) -> run_results.json
+  [7 run] dbt build (dbt subprocess, env per call) -> run_results.json
                          |
   [8 report] per-model status, timings, row counts; optional verify vs Snowflake
 ```
@@ -76,7 +76,7 @@ Acceptance test for the app: `retail_analytics_dbt` from GitHub runs read mode a
 | `config.py` | Typed config (pydantic): account, database list, auth refs, mode, mapping rules, naming rules |
 | `repo.py` | Clone/fetch any git URL (GitHub, GitLab, self-hosted), pin branch/commit, token from env/credential helper |
 | `workspace.py` | Create `.dbt_horizon/<repo>/<commit>/` copy, apply overlay, keep it reproducible |
-| `inspect.py` | Dummy profile -> `dbt deps` + `dbt parse` via `dbtRunner` -> load `manifest.json` into an inventory |
+| `inventory.py` + `dbt_cli.py` | Parse profile -> `dbt deps` + `dbt parse` in a subprocess -> load `manifest.json` into an inventory |
 | `catalog.py` | DuckDB + iceberg extension: secret, attach, list namespaces/tables, probe read (`LIMIT 0`) |
 | `snowflake_meta.py` | Metadata-only Snowflake calls with the PAT (`SHOW SCHEMAS/OBJECTS`, `SHOW GRANTS`), no warehouse |
 | `rules/` | One file per rule family (sources, materializations, configs, hooks, packages, sql, types) |
@@ -129,7 +129,7 @@ unsupported_policy: exclude                # exclude model (and its children) | 
 
 ### 5.2 inspect
 - Write a throwaway DuckDB profile (`:memory:`) so `dbt parse` works without Snowflake creds.
-- `dbt deps` then `dbt parse` through `dbtRunner`; load `target/manifest.json`.
+- `dbt deps` then `dbt parse` in a dbt subprocess; load `target/manifest.json`.
 - Inventory: sources (database, schema, identifier, whether set from `var()`), models
   (materialization, config: `cluster_by`, `transient`, `copy_grants`, `snowflake_warehouse`, ...),
   hooks, snapshots, seeds, Python models, packages, root-project macro overrides
@@ -196,8 +196,8 @@ Files the app **patches** in the workspace copy:
 - Missing pieces -> `setup-sql` renders the exact Snowflake script (roles, schemas, grants, service user, PAT).
 
 ### 5.7 run + report
-- `dbtRunner().invoke(["build", "--target", ..., "--profiles-dir", ws, "--project-dir", ws, "--vars", ...])`
-  with env passed in-process (no shell, no leakage).
+- dbt subprocess `["build", "--target", ..., "--profiles-dir", ws, "--project-dir", ws, "--vars", ...]`
+  with the env passed explicitly to the subprocess (no shell, no leakage).
 - Report: compat outcomes, per-model status/time, rows written, excluded models and why.
 - Optional `verify`: compare row counts / sums with the Snowflake-built models (needs a warehouse; off by default).
 
@@ -242,6 +242,9 @@ Testing throughout:
 | Write-mode auth | Reader PAT for sources (read-only attach) + writer PAT for target schemas (least privilege) |
 | Unsupported models | Excluded together with their children; listed with the reason in the report |
 | Code home | New GitHub repo `harikrishna1822/dbt-horizon`; `snowflake-dbt` is the test fixture |
+
+| dbt invocation | Subprocess with an explicit env per call, not `dbtRunner` in-process: no state or open log files carried between runs (Windows locks them), PATs scoped to the call |
+| Name resolution | Parse profile resolves names like the Snowflake target (database attached under its name, schema from the repo's `profiles.yml` or `snowflake.target`); unquoted source names are upper-cased as Snowflake does |
 
 Still open:
 1. Default for `view` in write mode: `ephemeral` (POC behaviour) or `table`?
