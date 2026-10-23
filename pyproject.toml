@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dbt-horizon"
+version = "0.1.0"
+description = "Run a Snowflake dbt project on DuckDB over Snowflake Horizon Iceberg tables"
+readme = "README.md"
+requires-python = ">=3.11"
+# Pinned: Horizon external-engine writes need DuckDB >= 1.5.4 and the attach options it
+# added; later phases add dbt-core / dbt-duckdb / sqlglot / ruamel.yaml here.
+dependencies = [
+    "duckdb==1.5.6",
+    "pydantic>=2.7,<3",
+    "PyYAML>=6,<7",
+    "typer>=0.12,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+dbt-horizon = "dbt_horizon.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "online: needs a Snowflake account (set DBT_HORIZON_ONLINE=1 and the PAT env vars)",
+]

@@ -1,0 +1,31 @@
+# dbt-horizon config for github.com/harikrishna1822/snowflake-dbt
+# Secrets are referenced by env var name only; put the values in the shell or an --env-file.
+repo:
+  url: https://github.com/harikrishna1822/snowflake-dbt.git
+  ref: main
+  project_dir: retail_analytics_dbt
+  # token_env: GITHUB_TOKEN          # only needed for private repos
+
+snowflake:
+  account: fblpisn-umc02429          # SELECT CURRENT_ORGANIZATION_NAME() || '-' || CURRENT_ACCOUNT_NAME();
+  databases: [RETAIL_ANALYTICS]
+  reader:
+    role: DUCKDB_READER
+    pat_env: SNOWFLAKE_PAT
+  writer:                            # write mode only
+    role: DBT_DUCKDB_WRITER
+    pat_env: SNOWFLAKE_WRITE_PAT
+
+mode: read
+
+# The project reads native CORE tables in Snowflake; DuckDB reads their Iceberg copies.
+source_mapping:
+  - match: { database: RETAIL_ANALYTICS, schema: CORE }
+    to:    { schema: CORE_ICEBERG_S3 }
+
+target_naming:
+  schema: "{schema}_ICEBERG"         # DBT_RETAIL -> DBT_RETAIL_ICEBERG
+  identifier_case: upper
+
+unsupported_policy: exclude
+workspace_root: ../.dbt_horizon
