@@ -4,8 +4,9 @@ Run a Snowflake dbt project on DuckDB against the account's Snowflake-managed Ic
 through the Snowflake Horizon Iceberg REST Catalog. Works for any dbt repo (GitHub, GitLab,
 self-hosted) and any Snowflake account; the customer repo is never modified.
 
-Design: [docs/design.md](docs/design.md). Status: **Phase 1 (foundation)**: config, repo sync,
-workspace, Horizon connection, `connect` command.
+Design: [docs/design.md](docs/design.md). Status:
+- **Phase 1 (foundation)**: config, repo sync, workspace, Horizon connection, `connect`.
+- **Phase 2 (inspect + analyze)**: dbt-parsed inventory, rule engine, compatibility report.
 
 ## Install
 
@@ -32,7 +33,9 @@ Copy-Item examples\snowflake-dbt.env.example examples\snowflake-dbt.env   # fill
 | `snowflake.databases` | databases to attach |
 | `snowflake.reader` / `writer` | role + env var of its PAT (writer: write mode only) |
 | `source_mapping` | where the Iceberg copy of a source schema lives (e.g. `CORE` -> `CORE_ICEBERG_S3`) |
+| `snowflake.target` | database/schema of the Snowflake dbt target (default: the repo's `profiles.yml`) |
 | `target_naming.schema` | write-mode target schema, e.g. `{schema}_ICEBERG` |
+| `unsupported_policy` | `exclude` (skip blocked models and everything downstream) or `fail` |
 
 ## Commands
 
@@ -44,6 +47,29 @@ dbt-horizon connect -c examples\snowflake-dbt.yml --env-file examples\snowflake-
 under `.dbt_horizon/workspaces/<repo>/<commit>/`, attaches each database through Horizon with
 the reader PAT (read-only), lists the Iceberg tables (`--probe` reads one row of each), and, if a
 writer is configured, lists the schemas the writer role can see.
+
+```powershell
+dbt-horizon inspect -c examples\snowflake-dbt.yml
+dbt-horizon analyze -c examples\snowflake-dbt.yml --env-file examples\snowflake-dbt.env --mode write
+```
+
+`inspect` runs `dbt parse` in the workspace against a throwaway DuckDB profile that resolves
+names like the Snowflake target (no Snowflake credentials), and prints the inventory: models by
+materialization, tests, sources (and which take their location from `var()`), hooks, packages.
+
+`analyze` applies the rules and writes `compat_report_<mode>.md` / `.json` in the workspace's
+`.dbt_horizon/` folder. Every finding has one outcome:
+
+| Outcome | Meaning |
+|---|---|
+| `auto_fixed` | the overlay changes it deterministically (e.g. view -> ephemeral, `--vars` remap) |
+| `review` | runs, but a person should check it (e.g. FLATTEN until the transpile layer) |
+| `needs_mapping` | config input required (e.g. source has no Iceberg copy in Horizon) |
+| `unsupported` | can't run on DuckDB (e.g. Python/Snowpark models, CONNECT BY) |
+
+Blocking outcomes (`needs_mapping`, `unsupported`) exclude the node and everything downstream
+(policy `exclude`), or stop the run (policy `fail`, exit code 1). `--offline` skips the Horizon
+check (sources become `review`).
 
 ## Tests
 

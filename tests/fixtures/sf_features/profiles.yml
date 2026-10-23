@@ -1,0 +1,11 @@
+sf_features:
+  target: prod
+  outputs:
+    prod:
+      type: snowflake
+      account: myorg-myaccount
+      user: dbt
+      role: TRANSFORMER
+      warehouse: WH
+      database: ANALYTICS
+      schema: MARTS

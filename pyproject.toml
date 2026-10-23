@@ -9,8 +9,10 @@ description = "Run a Snowflake dbt project on DuckDB over Snowflake Horizon Iceb
 readme = "README.md"
 requires-python = ">=3.11"
 # Pinned: Horizon external-engine writes need DuckDB >= 1.5.4 and the attach options it
-# added; later phases add dbt-core / dbt-duckdb / sqlglot / ruamel.yaml here.
+# added; dbt versions are the ones the POC ran 31/31 with. Later phases add sqlglot / ruamel.yaml.
 dependencies = [
+    "dbt-core~=1.12.6",
+    "dbt-duckdb~=1.11.0",
     "duckdb==1.5.6",
     "pydantic>=2.7,<3",
     "PyYAML>=6,<7",

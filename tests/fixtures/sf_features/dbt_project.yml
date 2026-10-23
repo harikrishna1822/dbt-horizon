@@ -1,0 +1,16 @@
+name: sf_features
+version: '1.0.0'
+config-version: 2
+profile: sf_features
+
+vars:
+  raw_db: RAW
+  raw_schema: SALES
+
+on-run-end:
+  - "grant usage on schema {{ target.schema }} to role REPORTER"
+  - "{{ log('run finished', info=True) }}"
+
+models:
+  sf_features:
+    +materialized: table
