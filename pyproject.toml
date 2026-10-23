@@ -28,6 +28,9 @@ dbt-horizon = "dbt_horizon.cli:app"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+dbt_horizon = ["shim/*.sql"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [

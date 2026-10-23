@@ -18,6 +18,8 @@ from .repo import redact, select_project, sync_repo
 from .report import summary_lines, write_report
 from .rules import analyze as analyze_project
 from .rules.sources import map_location
+from .run import run_build
+from .transform import build_read_overlay
 from .workspace import Workspace, create_workspace
 
 app = typer.Typer(no_args_is_help=True, add_completion=False,
@@ -200,6 +202,50 @@ def analyze(config: Path = ConfigOpt, env_file: Optional[Path] = EnvFileOpt,
         _say(f"\nReport     {md_path}\n           {json_path}")
         if not analysis.runnable:
             raise typer.Exit(1)
+
+    _run(body)
+
+
+@app.command()
+def run(config: Path = ConfigOpt, env_file: Optional[Path] = EnvFileOpt,
+        mode: Optional[str] = typer.Option(None, "--mode", help="read | write (default: config mode)"),
+        select: Optional[list[str]] = typer.Option(None, "--select", "-s", help="dbt selector (repeatable)")) -> None:
+    """Analyze, apply the overlay in the workspace and run dbt build on DuckDB."""
+    def body() -> None:
+        cfg = load_config(config)
+        run_mode = mode or cfg.mode
+        if run_mode not in ("read", "write"):
+            raise ConfigError("--mode must be read or write")
+        if run_mode == "write":
+            raise ConfigError("write mode is not available yet (phase 4); use --mode read")
+        env = build_env(env_file)
+        ws = prepare_workspace(cfg, env)
+        inv = _parse(cfg, ws, env)
+        analysis = analyze_project(inv, cfg, _horizon_tables(cfg, inv, env), mode=run_mode)
+        write_report(ws, inv, analysis)
+        for line in summary_lines(analysis):
+            _say(line)
+        if not analysis.runnable:
+            raise typer.Exit(1)
+
+        overlay = build_read_overlay(cfg, ws, inv, analysis)
+        _say(f"Overlay    {len(overlay.changes)} change(s), see {ws.metadata_path / 'overlay.json'}")
+        if overlay.vars:
+            _say(f"Vars       {overlay.vars}")
+        if overlay.exclude:
+            _say(f"Exclude    {' '.join(overlay.exclude)}")
+        _say("\nRunning dbt build ...")
+        summary = run_build(ws, overlay, env, select=select)
+        _say(f"Results    {', '.join(f'{k}={v}' for k, v in summary.counts().items()) or 'none'}")
+        for failure in summary.failed():
+            first = failure.message.splitlines()[0] if failure.message else ""
+            _say(f"  {failure.status:7} {failure.unique_id}: {first}")
+        for error in summary.errors:
+            _say(f"  error   {error}")
+        _say(f"Output     {overlay.output_path}")
+        if not summary.success:
+            raise typer.Exit(1)
+        _say("Build OK.")
 
     _run(body)
 

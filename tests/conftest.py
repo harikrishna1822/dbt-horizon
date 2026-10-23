@@ -1,11 +1,29 @@
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
+FIXTURES = Path(__file__).parent / "fixtures"
+
 
 def git(*args: str, cwd: Path) -> str:
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
+
+
+def fixture_workspace(root: Path, name: str = "sf_features"):
+    """Fixture project committed to a local origin repo, synced and copied into a workspace."""
+    from dbt_horizon.repo import sync_repo
+    from dbt_horizon.workspace import create_workspace
+
+    origin = root / "origin"
+    shutil.copytree(FIXTURES / name, origin / name)
+    ident = ["-c", "user.email=t@e.com", "-c", "user.name=t"]
+    git("init", "-q", "-b", "main", cwd=origin)
+    git(*ident, "add", ".", cwd=origin)
+    git(*ident, "commit", "-q", "-m", "fixture", cwd=origin)
+    checkout = sync_repo(origin.as_uri(), "main", root / "cache")
+    return create_workspace(checkout, name, root / "cache")
 
 
 @pytest.fixture

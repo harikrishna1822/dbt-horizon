@@ -7,13 +7,9 @@ import pytest
 
 from dbt_horizon.config import AppConfig
 from dbt_horizon.inventory import parse_project
-from dbt_horizon.repo import sync_repo
 from dbt_horizon.report import report_markdown, write_report
 from dbt_horizon.rules import Outcome, analyze
-from dbt_horizon.workspace import create_workspace
-from tests.conftest import git
-
-FIXTURE = Path(__file__).parents[1] / "fixtures" / "sf_features"
+from tests.conftest import fixture_workspace
 
 # What Horizon "lists": the Iceberg copies of RAW.SALES, nothing for RAW.EVENTS.
 CATALOG = {"RAW.SALES_ICEBERG.ORDERS", "RAW.SALES_ICEBERG.CUSTOMERS"}
@@ -32,14 +28,7 @@ def config(**overrides) -> AppConfig:
 
 @pytest.fixture(scope="module")
 def parsed(tmp_path_factory):
-    root = tmp_path_factory.mktemp("analyze")
-    origin = root / "origin"
-    shutil.copytree(FIXTURE, origin / "sf_features")
-    git("init", "-q", "-b", "main", cwd=origin)
-    git("-c", "user.email=t@e.com", "-c", "user.name=t", "add", ".", cwd=origin)
-    git("-c", "user.email=t@e.com", "-c", "user.name=t", "commit", "-q", "-m", "fixture", cwd=origin)
-    checkout = sync_repo(origin.as_uri(), "main", root / "cache")
-    ws = create_workspace(checkout, "sf_features", root / "cache")
+    ws = fixture_workspace(tmp_path_factory.mktemp("analyze"))
     return ws, parse_project(ws)
 
 
@@ -81,6 +70,7 @@ def test_read_mode(parsed):
     assert outcomes == {
         "clicks_daily": Outcome.AUTO_FIXED,      # cluster_by + grant hook; blocked via its source
         "country_codes": Outcome.OK,
+        "dyn_counts": Outcome.AUTO_FIXED,        # dynamic_table -> table, DIV0, grant hook disabled
         "dyn_summary": Outcome.AUTO_FIXED,       # dynamic_table -> table, Snowflake configs stripped
         "hierarchy": Outcome.UNSUPPORTED,        # CONNECT BY
         "hierarchy_report": Outcome.OK,          # fine itself, excluded as downstream

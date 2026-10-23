@@ -7,6 +7,7 @@ Rebuilt from scratch on every run: the same commit + config gives the same files
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,10 +36,20 @@ class Workspace:
         return self.root / METADATA_DIR
 
 
+def remove_tree(path: Path) -> None:
+    """rmtree that also works past Windows' 260-character limit: dbt writes compiled files
+    with the \\\\?\\ long-path prefix (target/compiled/<project>/models/.../<test>.sql), so
+    deleting them needs it too."""
+    target = str(Path(path).resolve())
+    if os.name == "nt" and not target.startswith("\\\\?\\"):
+        target = "\\\\?\\" + target
+    shutil.rmtree(target)
+
+
 def create_workspace(checkout: Checkout, project_dir: str, cache_root: Path) -> Workspace:
     root = Path(cache_root) / "workspaces" / repo_slug(checkout.url) / checkout.commit[:12]
     if root.exists():
-        shutil.rmtree(root)
+        remove_tree(root)
     # Whole repo, not only the project: packages.yml may use local paths like ../shared.
     shutil.copytree(checkout.path, root, ignore=_IGNORE)
     ws = Workspace(root=root, project_dir=project_dir, checkout=checkout)

@@ -244,6 +244,9 @@ Testing throughout:
 | Code home | New GitHub repo `harikrishna1822/dbt-horizon`; `snowflake-dbt` is the test fixture |
 
 | dbt invocation | Subprocess with an explicit env per call, not `dbtRunner` in-process: no state or open log files carried between runs (Windows locks them), PATs scoped to the call |
+| Shim delivery | Shim macros are copied into the workspace project's first macro path (`macros/dbt_horizon/`): root-project macros win over dbt's and the adapter's, so no `dispatch` config or package install is needed. Project macros with the same name are renamed `project_<name>` |
+| Snowflake-only materializations | `dynamic_table` / `materialized_view` get a copy of the pinned dbt-duckdb `table` materialization under their name |
+| Windows paths | Workspaces are removed with the `\\?\` long-path prefix (dbt writes compiled files past 260 characters) |
 | Name resolution | Parse profile resolves names like the Snowflake target (database attached under its name, schema from the repo's `profiles.yml` or `snowflake.target`); unquoted source names are upper-cased as Snowflake does |
 
 Still open:
