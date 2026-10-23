@@ -48,6 +48,20 @@ def test_analyze_read_matches_poc():
     assert data["counts"] == {"ok": 0, "auto_fixed": 1, "review": 0, "needs_mapping": 0, "unsupported": 0}
 
 
+def test_run_read_matches_poc():
+    out = invoke("run", "--mode", "read")
+    assert out.exit_code == 0, out.output
+    assert "Results    pass=26, success=9" in out.output and "Build OK." in out.output
+    output = next(line.split(None, 1)[1] for line in out.output.splitlines() if line.startswith("Output"))
+    import duckdb
+    con = duckdb.connect(output.strip(), read_only=True)
+    counts = {t: con.execute(f'SELECT COUNT(*) FROM "DBT_RETAIL"."{t}"').fetchone()[0]
+              for t in ("dim_store", "dim_product", "fct_sales", "agg_sales_daily_store", "agg_product_performance")}
+    con.close()
+    assert counts == {"dim_store": 50, "dim_product": 200, "fct_sales": 9998,
+                      "agg_sales_daily_store": 7707, "agg_product_performance": 200}
+
+
 def test_analyze_write_matches_poc():
     data = report("write")
     planned = {n["name"]: (n["planned"], n["target"]) for n in data["nodes"]}

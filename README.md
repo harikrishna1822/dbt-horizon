@@ -7,6 +7,7 @@ self-hosted) and any Snowflake account; the customer repo is never modified.
 Design: [docs/design.md](docs/design.md). Status:
 - **Phase 1 (foundation)**: config, repo sync, workspace, Horizon connection, `connect`.
 - **Phase 2 (inspect + analyze)**: dbt-parsed inventory, rule engine, compatibility report.
+- **Phase 3 (read mode)**: overlay in the workspace, `dbt build` on DuckDB into a local file.
 
 ## Install
 
@@ -70,6 +71,30 @@ materialization, tests, sources (and which take their location from `var()`), ho
 Blocking outcomes (`needs_mapping`, `unsupported`) exclude the node and everything downstream
 (policy `exclude`), or stop the run (policy `fail`, exit code 1). `--offline` skips the Horizon
 check (sources become `review`).
+
+```powershell
+dbt-horizon run -c examples\snowflake-dbt.yml --env-file examples\snowflake-dbt.env --mode read
+```
+
+`run` analyzes, applies the overlay to the workspace copy and runs `dbt build` (in a subprocess,
+the reader PAT passed only to it). Models build into
+`.dbt_horizon/outputs/<repo>/<project>_local.duckdb`, schemas named as in Snowflake.
+
+Read-mode overlay (all in the workspace, listed in `.dbt_horizon/overlay.json`):
+
+| Change | Why |
+|---|---|
+| generated `profiles.yml` (target `horizon_read`) | local output file + every source database attached read-only through Horizon under its own name; PAT via `env_var('DBT_HORIZON_READER_PAT')` |
+| `--vars` / sources yml rewrite | sources read their Iceberg copy (`source_mapping`) |
+| `--exclude <node>+` | blocked nodes and everything downstream |
+| `macros/dbt_horizon/compat.sql` + `on-run-start` hook | DuckDB macros for IFF, NVL, NVL2, DIV0, ZEROIFNULL, NULLIFZERO, TO_VARCHAR, ARRAY_SIZE |
+| `macros/dbt_horizon/run_hooks.sql` | model hooks that are Snowflake admin statements (GRANT, ...) are skipped |
+| `macros/dbt_horizon/naming.sql` | every model builds into the local database (`generate_database_name`) |
+| `macros/dbt_horizon/materialization_<name>.sql` | `dynamic_table` / `materialized_view` build as tables |
+| `dbt_project.yml` hooks | Snowflake admin statements removed from on-run-start/end |
+
+Staging views keep their Snowflake materialization; they read the Horizon attach, so they work
+during dbt runs (and in any session that attaches the same databases), tables work anywhere.
 
 ## Tests
 

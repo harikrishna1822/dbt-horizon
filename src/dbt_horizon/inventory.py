@@ -148,7 +148,7 @@ def parse_project(ws: Workspace, env: Mapping[str, str] | None = None,
     profiles_dir = write_parse_profile(ws, profile_name, database, schema)
     common = ["--project-dir", str(project), "--profiles-dir", str(profiles_dir),
               "--target", PARSE_TARGET, "--quiet"]
-    if _packages(project):
+    if project_packages(project):
         _invoke_dbt(["deps", *common], env)
     _invoke_dbt(["parse", "--no-partial-parse", *common], env)
     manifest_path = project / "target" / "manifest.json"
@@ -158,7 +158,7 @@ def parse_project(ws: Workspace, env: Mapping[str, str] | None = None,
     return inv
 
 
-def _packages(project: Path) -> list[dict]:
+def project_packages(project: Path) -> list[dict]:
     found: list[dict] = []
     for name in ("packages.yml", "dependencies.yml"):
         found += [p for p in _read_yaml(project / name).get("packages", []) or [] if isinstance(p, dict)]
@@ -243,7 +243,7 @@ def build_inventory(manifest: dict, project: Path, profile_name: str) -> Invento
         root_macro_overrides=sorted(m["name"] for m in macros if m["name"] in OVERRIDABLE_MACROS),
         root_materializations=sorted(m["name"].removeprefix("materialization_")
                                      for m in macros if m["name"].startswith("materialization_")),
-        packages=_packages(project),
+        packages=project_packages(project),
         child_map={k: list(v) for k, v in manifest.get("child_map", {}).items()},
         project_vars=project_yml.get("vars", {}) or {},
     )
